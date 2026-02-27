@@ -26,9 +26,22 @@ export async function POST(req: Request) {
             console.error("Acceso denegado: Usuario no autenticado intentó usar la API.");
             return NextResponse.json({ error: 'No autorizado. Por favor inicie sesión para utilizar la IA.' }, { status: 401 });
         }
-        // 1. Convert Image to Base64 and Buffer
+        // 1. Convert Image to Buffer and Resize to prevent OOM/Timeouts
         const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        let buffer = Buffer.from(arrayBuffer);
+
+        // --- PRE-PROCESAMIENTO: Optimización estricta de memoria ---
+        try {
+            const sharp = (await import('sharp')).default;
+            buffer = await sharp(buffer)
+                .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 90 })
+                .toBuffer();
+            console.log("Imagen redimensionada exitosamente para evitar crashes.");
+        } catch (e: any) {
+            console.warn("Advertencia al redimensionar la foto original:", e.message);
+        }
+
         const imageBase64 = buffer.toString('base64');
         const mimeType = file.type || 'image/jpeg';
 
@@ -195,12 +208,14 @@ export async function POST(req: Request) {
                 const width = originalInfo.width!;
                 const height = originalInfo.height!;
 
-                // 1. Invertir la máscara (lo blanco se pinta, lo negro se conserva)
+                // 1. Invertir la máscara y añadir Suavizado de Bordes (Feathering)
                 // Convertimos lo negro a blanco (opaco = conservar la original) y lo blanco a negro (transparente = mostrar IA)
+                // El blur() crea una transición perfecta invisible entre la foto original y el piso generado.
                 const alphaMask = await sharp(maskBuffer)
                     .resize(width, height, { fit: 'fill' })
                     .negate({ alpha: false })
                     .extractChannel(0) // Extrae un canal en escala de grises
+                    .blur(15) // Añade feathering de 15px para mezclar suavemente los bordes
                     .toBuffer();
 
                 // 2. Recortar la imagen original usando la nueva máscara como transparencia
