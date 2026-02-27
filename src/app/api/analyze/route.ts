@@ -26,22 +26,9 @@ export async function POST(req: Request) {
             console.error("Acceso denegado: Usuario no autenticado intentó usar la API.");
             return NextResponse.json({ error: 'No autorizado. Por favor inicie sesión para utilizar la IA.' }, { status: 401 });
         }
-        // 1. Convert Image to Buffer and Resize to prevent OOM/Timeouts
+        // 1. Convert Image to Base64 and Buffer
         const arrayBuffer = await file.arrayBuffer();
-        let buffer = Buffer.from(arrayBuffer);
-
-        // --- PRE-PROCESAMIENTO: Optimización estricta de memoria ---
-        try {
-            const sharp = (await import('sharp')).default;
-            buffer = await sharp(buffer)
-                .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-                .jpeg({ quality: 90 })
-                .toBuffer();
-            console.log("Imagen redimensionada exitosamente para evitar crashes.");
-        } catch (e: any) {
-            console.warn("Advertencia al redimensionar la foto original:", e.message);
-        }
-
+        const buffer = Buffer.from(arrayBuffer);
         const imageBase64 = buffer.toString('base64');
         const mimeType = file.type || 'image/jpeg';
 
@@ -192,54 +179,7 @@ export async function POST(req: Request) {
             throw new Error("Vertex AI returned an invalid prediction format");
         }
 
-        let finalImageBase64 = resultBase64;
-
-        // --- POST-PROCESAMIENTO: Preservación estricta de la habitación con Sharp ---
-        if (maskBase64) {
-            console.log("Integrando la foto original usando Sharp para evitar que Vertex modifique las paredes...");
-            try {
-                const sharp = (await import('sharp')).default;
-
-                const originalBuffer = buffer;
-                const maskBuffer = Buffer.from(maskBase64, 'base64');
-                const generatedBuffer = Buffer.from(resultBase64, 'base64');
-
-                const originalInfo = await sharp(originalBuffer).metadata();
-                const width = originalInfo.width!;
-                const height = originalInfo.height!;
-
-                // 1. Invertir la máscara y añadir Suavizado de Bordes (Feathering)
-                // Convertimos lo negro a blanco (opaco = conservar la original) y lo blanco a negro (transparente = mostrar IA)
-                // El blur() crea una transición perfecta invisible entre la foto original y el piso generado.
-                const alphaMask = await sharp(maskBuffer)
-                    .resize(width, height, { fit: 'fill' })
-                    .negate({ alpha: false })
-                    .extractChannel(0) // Extrae un canal en escala de grises
-                    .blur(15) // Añade feathering de 15px para mezclar suavemente los bordes
-                    .toBuffer();
-
-                // 2. Recortar la imagen original usando la nueva máscara como transparencia
-                const cutOriginal = await sharp(originalBuffer)
-                    .resize(width, height, { fit: 'fill' })
-                    .removeAlpha() // Asegurar 3 canales
-                    .joinChannel(alphaMask) // Añade el cuarto (Alpha)
-                    .toBuffer();
-
-                // 3. Pegar la imagen original recortada sobre la imagen generada por IA
-                const finalImageBuffer = await sharp(generatedBuffer)
-                    .resize(width, height, { fit: 'fill' })
-                    .composite([{ input: cutOriginal, blend: 'over' }])
-                    .jpeg({ quality: 90 }) // Reducir un poco el peso
-                    .toBuffer();
-
-                finalImageBase64 = finalImageBuffer.toString('base64');
-            } catch (err: any) {
-                console.error("Error en Sharp (post-procesamiento):", err.message);
-                // Si falla el post-procesamiento, devolvemos la imagen cruda de la IA como fallback
-            }
-        }
-
-        const dataUri = `data:image/jpeg;base64,${finalImageBase64}`;
+        const dataUri = `data:image/jpeg;base64,${resultBase64}`;
 
         return NextResponse.json({
             success: true,
