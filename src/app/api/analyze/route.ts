@@ -76,21 +76,37 @@ export async function POST(req: Request) {
 
         // Leemos dinámicamente el proyecto del json porque saas-creador-interiores daba 403 Forbidden.
         let projectId = process.env.GOOGLE_CLOUD_PROJECT || 'saas-creador-interiores';
-        try {
-            const fileData = fs.readFileSync(credentialsPath, 'utf8');
-            const creds = JSON.parse(fileData);
-            if (creds.project_id) {
-                projectId = creds.project_id;
-            }
-        } catch (e) {
-            console.warn("No se pudo leer el project_id del json, usando fallback.");
-        }
 
         const { PredictionServiceClient } = v1;
-        const clientOptions = {
+        const clientOptions: any = {
             apiEndpoint: 'us-central1-aiplatform.googleapis.com',
-            keyFilename: credentialsPath
         };
+
+        // Soporte para Vercel: Leer credenciales desde variable de entorno segura
+        if (process.env.GCP_CREDENTIALS) {
+            try {
+                const creds = JSON.parse(process.env.GCP_CREDENTIALS);
+                clientOptions.credentials = {
+                    client_email: creds.client_email,
+                    private_key: creds.private_key,
+                };
+                if (creds.project_id) projectId = creds.project_id;
+            } catch (e) {
+                console.error("Error parseando GCP_CREDENTIALS de Vercel", e);
+            }
+        } else {
+            // Soporte Local: Leer archivo
+            try {
+                clientOptions.keyFilename = credentialsPath;
+                const fileData = fs.readFileSync(credentialsPath, 'utf8');
+                const creds = JSON.parse(fileData);
+                if (creds.project_id) {
+                    projectId = creds.project_id;
+                }
+            } catch (e) {
+                console.warn("No se pudo leer el project_id del json local, usando fallback.");
+            }
+        }
 
         // Instanciar cliente
         const client = new PredictionServiceClient(clientOptions);

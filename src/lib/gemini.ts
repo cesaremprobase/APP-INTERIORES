@@ -7,7 +7,11 @@ export async function analyzeRoomWithGemini(
     textureBase64?: string,
     textureMimeType?: string
 ): Promise<string> {
-    const API_KEY = "AQ.Ab8RN6IC95VhjWQ4ASMJkQp7N-DRU7TnDiRQsT68teOnAuxQJA"
+    const API_KEY = process.env.GEMINI_API_KEY;
+    if (!API_KEY) {
+        console.error("Missing GEMINI_API_KEY in environment variables.");
+        throw new Error("Missing GEMINI_API_KEY");
+    }
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=${API_KEY}`
 
     const promptText = `
