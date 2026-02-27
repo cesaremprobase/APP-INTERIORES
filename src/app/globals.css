@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 11, 17, 32;
+  --background-end-rgb: 11, 17, 32;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  min-height: 100vh;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-epoxy-glass backdrop-blur-md border border-white/10 shadow-xl;
+  }
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-epoxy-primary via-epoxy-accent to-epoxy-gold;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 rounded-full font-bold text-white bg-gradient-to-r from-epoxy-primary to-epoxy-accent hover:shadow-lg hover:shadow-epoxy-primary/25 transition-all duration-300 transform hover:scale-105;
+  }
+}
