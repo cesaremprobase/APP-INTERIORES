@@ -18,6 +18,14 @@ export async function POST(req: Request) {
 
         console.log("Iniciando ruta de API tradicion /api/analyze...");
 
+        // 0. Autenticación de Supabase (Server-Side)
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+            console.error("Acceso denegado: Usuario no autenticado intentó usar la API.");
+            return NextResponse.json({ error: 'No autorizado. Por favor inicie sesión para utilizar la IA.' }, { status: 401 });
+        }
         // 1. Convert Image to Base64 and Buffer
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
