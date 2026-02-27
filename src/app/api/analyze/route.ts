@@ -179,7 +179,52 @@ export async function POST(req: Request) {
             throw new Error("Vertex AI returned an invalid prediction format");
         }
 
-        const dataUri = `data:image/jpeg;base64,${resultBase64}`;
+        let finalImageBase64 = resultBase64;
+
+        // --- POST-PROCESAMIENTO: Preservación estricta de la habitación con Sharp ---
+        if (maskBase64) {
+            console.log("Integrando la foto original usando Sharp para evitar que Vertex modifique las paredes...");
+            try {
+                const sharp = (await import('sharp')).default;
+
+                const originalBuffer = buffer;
+                const maskBuffer = Buffer.from(maskBase64, 'base64');
+                const generatedBuffer = Buffer.from(resultBase64, 'base64');
+
+                const originalInfo = await sharp(originalBuffer).metadata();
+                const width = originalInfo.width!;
+                const height = originalInfo.height!;
+
+                // 1. Invertir la máscara (lo blanco se pinta, lo negro se conserva)
+                // Convertimos lo negro a blanco (opaco = conservar la original) y lo blanco a negro (transparente = mostrar IA)
+                const alphaMask = await sharp(maskBuffer)
+                    .resize(width, height, { fit: 'fill' })
+                    .negate({ alpha: false })
+                    .extractChannel(0) // Extrae un canal en escala de grises
+                    .toBuffer();
+
+                // 2. Recortar la imagen original usando la nueva máscara como transparencia
+                const cutOriginal = await sharp(originalBuffer)
+                    .resize(width, height, { fit: 'fill' })
+                    .removeAlpha() // Asegurar 3 canales
+                    .joinChannel(alphaMask) // Añade el cuarto (Alpha)
+                    .toBuffer();
+
+                // 3. Pegar la imagen original recortada sobre la imagen generada por IA
+                const finalImageBuffer = await sharp(generatedBuffer)
+                    .resize(width, height, { fit: 'fill' })
+                    .composite([{ input: cutOriginal, blend: 'over' }])
+                    .jpeg({ quality: 90 }) // Reducir un poco el peso
+                    .toBuffer();
+
+                finalImageBase64 = finalImageBuffer.toString('base64');
+            } catch (err: any) {
+                console.error("Error en Sharp (post-procesamiento):", err.message);
+                // Si falla el post-procesamiento, devolvemos la imagen cruda de la IA como fallback
+            }
+        }
+
+        const dataUri = `data:image/jpeg;base64,${finalImageBase64}`;
 
         return NextResponse.json({
             success: true,
