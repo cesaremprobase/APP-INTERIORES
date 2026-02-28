@@ -45,14 +45,15 @@ export async function POST(req: Request) {
 
         // 1. Convert Image to Buffer and Reduce dimensions memory-safely (Fixes "Failed to fetch" Crash)
         const arrayBuffer = await file.arrayBuffer();
-        let buffer = Buffer.from(arrayBuffer);
+        let buffer: Buffer = Buffer.from(arrayBuffer);
 
         try {
             const sharp = (await import('sharp')).default;
-            buffer = await sharp(buffer)
+            const processedBuffer = await sharp(buffer)
                 .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
                 .jpeg({ quality: 90 })
                 .toBuffer();
+            buffer = processedBuffer;
         } catch (e) {
             console.warn("Sharp no disponible para redimensionar, usando imagen original.");
         }
