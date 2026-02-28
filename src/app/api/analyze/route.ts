@@ -136,10 +136,10 @@ export async function POST(req: Request) {
                     throw new Error("El JSON no contiene 'client_email' o 'private_key'.");
                 }
 
-                clientOptions.credentials = {
-                    client_email: creds.client_email,
-                    private_key: creds.private_key,
-                };
+                // Escribir el key a un archivo temporal local en Vercel para una inicialización infalible
+                const tmpPath = path.join('/tmp', 'gcp-creds.json');
+                fs.writeFileSync(tmpPath, JSON.stringify(creds));
+                clientOptions.keyFilename = tmpPath;
 
                 if (creds.project_id) {
                     projectId = creds.project_id;
@@ -153,6 +153,9 @@ export async function POST(req: Request) {
         } else {
             // Soporte Local: Leer archivo
             try {
+                if (!fs.existsSync(credentialsPath)) {
+                    throw new Error(`Falta la variable de entorno GCP_CREDENTIALS y tampoco se encontró el archivo local: ${credentialsPath}`);
+                }
                 clientOptions.keyFilename = credentialsPath;
                 const fileData = fs.readFileSync(credentialsPath, 'utf8');
                 const creds = JSON.parse(fileData);
@@ -160,8 +163,9 @@ export async function POST(req: Request) {
                     projectId = creds.project_id;
                     clientOptions.projectId = creds.project_id;
                 }
-            } catch (e) {
-                console.warn("No se pudo leer el archivo local credenciales-gcp.json, usando fallback.");
+            } catch (e: any) {
+                console.error("Error cargando credenciales locales:", e.message);
+                throw new Error("¡FALTA LA VARIABLE GCP_CREDENTIALS! Si estás en Vercel, asegúrate de que creaste una variable llamada exactamente GCP_CREDENTIALS en Settings > Environment Variables, que esté marcada para el entorno 'Production' y que hayas hecho un Redeploy.");
             }
         }
 
