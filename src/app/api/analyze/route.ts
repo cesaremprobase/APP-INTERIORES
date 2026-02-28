@@ -122,15 +122,15 @@ export async function POST(req: Request) {
         // Soporte para Vercel: Leer credenciales desde variable de entorno segura
         if (process.env.GCP_CREDENTIALS) {
             try {
-                // Vercel a veces escapa los saltos de línea (\n) literalmente como texto en las variables de entorno.
-                let rawEnv = process.env.GCP_CREDENTIALS.replace(/\\n/g, '\n').trim();
+                let rawEnv = process.env.GCP_CREDENTIALS.trim();
 
-                // Si Vercel encerró todo el JSON en comillas extra
+                // Si Vercel encerró todo el JSON en comillas extra (doblemente serializado)
                 if (rawEnv.startsWith('"') && rawEnv.endsWith('"')) {
-                    rawEnv = rawEnv.slice(1, -1);
+                    rawEnv = JSON.parse(rawEnv); // Esto deserializa las comillas y los \n escapados
                 }
 
-                const creds = JSON.parse(rawEnv);
+                // Si Vercel devuelve un string crudo normal
+                const creds = typeof rawEnv === 'string' ? JSON.parse(rawEnv) : rawEnv;
 
                 if (!creds.client_email || !creds.private_key) {
                     throw new Error("El JSON no contiene 'client_email' o 'private_key'.");
