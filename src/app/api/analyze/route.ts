@@ -123,15 +123,32 @@ export async function POST(req: Request) {
         if (process.env.GCP_CREDENTIALS) {
             try {
                 // Vercel a veces escapa los saltos de línea (\n) literalmente como texto en las variables de entorno.
-                const rawEnv = process.env.GCP_CREDENTIALS.replace(/\\n/g, '\n');
+                let rawEnv = process.env.GCP_CREDENTIALS.replace(/\\n/g, '\n').trim();
+
+                // Si Vercel encerró todo el JSON en comillas extra
+                if (rawEnv.startsWith('"') && rawEnv.endsWith('"')) {
+                    rawEnv = rawEnv.slice(1, -1);
+                }
+
                 const creds = JSON.parse(rawEnv);
+
+                if (!creds.client_email || !creds.private_key) {
+                    throw new Error("El JSON no contiene 'client_email' o 'private_key'.");
+                }
+
                 clientOptions.credentials = {
                     client_email: creds.client_email,
                     private_key: creds.private_key,
                 };
-                if (creds.project_id) projectId = creds.project_id;
+
+                if (creds.project_id) {
+                    projectId = creds.project_id;
+                    clientOptions.projectId = creds.project_id; // Forzar el ID en las opciones del cliente
+                }
             } catch (e: any) {
-                console.error("Error parseando GCP_CREDENTIALS de Vercel. Asegúrate de pegarlo exacto.", e.message);
+                console.error("Vercel GCP_CREDENTIALS Parsing Error:", e.message);
+                // Lanza el error directamente para que apunte a la variable mal configurada en Vercel
+                throw new Error("Tus credenciales GCP_CREDENTIALS en Vercel no tienen un formato JSON válido. Asegúrate de copiar y pegar todo el archivo exacto. Detalles: " + e.message);
             }
         } else {
             // Soporte Local: Leer archivo
@@ -141,9 +158,10 @@ export async function POST(req: Request) {
                 const creds = JSON.parse(fileData);
                 if (creds.project_id) {
                     projectId = creds.project_id;
+                    clientOptions.projectId = creds.project_id;
                 }
             } catch (e) {
-                console.warn("No se pudo leer el project_id del json local, usando fallback.");
+                console.warn("No se pudo leer el archivo local credenciales-gcp.json, usando fallback.");
             }
         }
 
