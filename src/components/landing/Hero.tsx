@@ -30,7 +30,9 @@ export default function Hero() {
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                     <Link
-                        href="/cotizar"
+                        href="https://wa.me/51900475318?text=Hola,%20quisiera%20solicitar%20un%20presupuesto"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="btn-primary text-lg px-8 py-4 shadow-epoxy-primary/50 shadow-lg"
                     >
                         Solicitar Presupuesto
