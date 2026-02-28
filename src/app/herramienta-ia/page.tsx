@@ -137,6 +137,14 @@ export default function IAToolPage() {
                             Diseñador <span className="text-transparent bg-clip-text bg-gradient-to-r from-epoxy-gold to-yellow-200">IA</span>
                         </h1>
                         <p className="text-gray-400">Transforma tus espacios con Inteligencia Artificial.</p>
+                        {user && (
+                            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-epoxy-primary/10 border border-epoxy-primary/30 rounded-full">
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                <span className="text-sm text-gray-300">
+                                    Conectado como: <strong className="text-white">{user.user_metadata?.full_name || user.email?.split('@')[0] || user.email}</strong>
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -26,9 +26,37 @@ export async function POST(req: Request) {
             console.error("Acceso denegado: Usuario no autenticado intentó usar la API.");
             return NextResponse.json({ error: 'No autorizado. Por favor inicie sesión para utilizar la IA.' }, { status: 401 });
         }
-        // 1. Convert Image to Base64 and Buffer
+
+        // AUTO-CORRECCIÓN: Si el usuario no existe en la tabla profiles (porque no se corrió el trigger SQL), lo creamos.
+        try {
+            const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).single();
+            if (!profile) {
+                await supabase.from('profiles').insert({
+                    id: user.id,
+                    email: user.email,
+                    full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
+                    avatar_url: user.user_metadata?.avatar_url || ''
+                });
+                console.log("Perfil de Supabase creado automáticamente para el usuario.");
+            }
+        } catch (e: any) {
+            console.warn("Error al auto-crear perfil:", e.message);
+        }
+
+        // 1. Convert Image to Buffer and Reduce dimensions memory-safely (Fixes "Failed to fetch" Crash)
         const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        let buffer = Buffer.from(arrayBuffer);
+
+        try {
+            const sharp = (await import('sharp')).default;
+            buffer = await sharp(buffer)
+                .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 90 })
+                .toBuffer();
+        } catch (e) {
+            console.warn("Sharp no disponible para redimensionar, usando imagen original.");
+        }
+
         const imageBase64 = buffer.toString('base64');
         const mimeType = file.type || 'image/jpeg';
 
@@ -93,14 +121,16 @@ export async function POST(req: Request) {
         // Soporte para Vercel: Leer credenciales desde variable de entorno segura
         if (process.env.GCP_CREDENTIALS) {
             try {
-                const creds = JSON.parse(process.env.GCP_CREDENTIALS);
+                // Vercel a veces escapa los saltos de línea (\n) literalmente como texto en las variables de entorno.
+                const rawEnv = process.env.GCP_CREDENTIALS.replace(/\\n/g, '\n');
+                const creds = JSON.parse(rawEnv);
                 clientOptions.credentials = {
                     client_email: creds.client_email,
                     private_key: creds.private_key,
                 };
                 if (creds.project_id) projectId = creds.project_id;
-            } catch (e) {
-                console.error("Error parseando GCP_CREDENTIALS de Vercel", e);
+            } catch (e: any) {
+                console.error("Error parseando GCP_CREDENTIALS de Vercel. Asegúrate de pegarlo exacto.", e.message);
             }
         } else {
             // Soporte Local: Leer archivo
